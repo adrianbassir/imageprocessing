@@ -1,6 +1,14 @@
 [package]
-name = "imgProcessing"
+name = "image-processing"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+rayon = "1.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "knn_bench"
+harness = false
