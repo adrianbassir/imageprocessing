@@ -1,5 +1,5 @@
 # Sequential vs Parallel Image Classification in Rust
-### Adrian Bassir & Matthew kane
+## _Adrian Bassir & Matthew kane_
 **CSI-380: Emerging Languages**
 
 K-Nearest Neighbors classification on CIFAR-10, benchmarked across sequential and parallel execution models using `std::thread` and Rayon.
