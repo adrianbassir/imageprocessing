@@ -2,17 +2,97 @@
 ## _Adrian Bassir & Matthew kane_
 **CSI-380: Emerging Languages**
 
+**Authors:** Adrian Bassir, Matthew Kane
+
 K-Nearest Neighbors classification on CIFAR-10, benchmarked across sequential and parallel execution models using `std::thread` and Rayon.
 
 ---
 
-## Project Overview
+## Project Description
 
-This project implements image classification using the K-Nearest Neighbors algorithm on the CIFAR-10 dataset. The central objective is not classification accuracy — it is a rigorous comparison of sequential versus parallel execution strategies in Rust.
+This project implements image classification using the K-Nearest Neighbors (KNN) algorithm on the CIFAR-10 dataset, then benchmarks sequential execution against two parallel strategies — manual `std::thread` and Rayon — across multiple thread counts and two hardware systems. The central objective is not classification accuracy: it is a rigorous, quantitative comparison of parallel execution strategies in Rust.
 
-KNN classification is computationally expensive at inference time: classifying a single test image requires computing its distance to every training image. This makes it an ideal candidate for parallelization analysis. The project measures how effectively Rust's concurrency primitives distribute that work, and at what cost.
+**Algorithm:** K-Nearest Neighbors (KNN) with Euclidean distance over normalized RGB feature vectors.
 
-The deliverable is a working classifier paired with quantitative benchmarks across thread counts, demonstrating real-world speedup, efficiency, and scalability behavior.
+**Dataset:** CIFAR-10 — 50,000 training images and 10,000 test images at 32×32 pixels (3,072 features per image).
+
+**Evaluation metrics:** classification accuracy, execution time, speedup, and efficiency across thread counts of 1, 2, 4, and 8.
+
+---
+
+## Prerequisites
+
+**Rust toolchain:** rustc 1.75.0 or later. Install via [rustup](https://rustup.rs/).
+
+**System requirements:**
+- RAM: 16 GB recommended (the full CIFAR-10 training set expands to ~600 MB of `f32` vectors in memory)
+- CPU: 4+ physical cores recommended to observe meaningful parallel speedup at higher thread counts
+
+**External crates** (declared in `Cargo.toml`):
+- `rayon` — data-parallel iterators
+- Any additional utility crates (e.g., `byteorder` for binary parsing) as needed
+
+No GPU, Python environment, or external build tooling is required.
+
+---
+
+## Setup Instructions
+
+### 1. Open the project
+
+```
+cd image-processing
+```
+
+### 2. Download the CIFAR-10 dataset
+
+The dataset is **not included** in this repository. Download it manually:
+
+1. Go to: https://www.cs.toronto.edu/~kriz/cifar.html
+2. Download **CIFAR-10 binary version (for C programs)** — `cifar-10-binary.tar.gz`
+3. Extract the archive
+
+### 3. Place dataset files
+
+Copy the extracted binary files into the `data/` directory at the project root:
+
+```
+data/
+├── data_batch_1.bin
+├── data_batch_2.bin
+├── data_batch_3.bin
+├── data_batch_4.bin
+├── data_batch_5.bin
+└── test_batch.bin
+```
+
+Do not rename the files. The loader expects these exact filenames.
+
+### 4. Build
+
+```bash
+cargo build --release
+```
+
+### 5. Run
+
+```bash
+cargo run --release
+```
+
+By default this runs all three classifiers (sequential, threaded, Rayon) and prints a benchmark summary. Optional flags for subset size, thread count, and K value will be documented once the CLI interface is finalized.
+
+### 6. Run tests
+
+```bash
+cargo test
+```
+
+### 7. Run benchmarks
+
+```bash
+cargo bench
+```
 
 ---
 
@@ -45,15 +125,30 @@ CIFAR-10 is also a standard benchmark with a well-documented binary format, whic
 The codebase will be organized around functional boundaries that map directly to the pipeline stages.
 
 ```
-src/
-├── main.rs            # Entry point, CLI argument handling, benchmark orchestration
-├── data.rs            # CIFAR-10 binary parsing, dataset loading, train/test splitting
-├── preprocess.rs      # Pixel normalization, feature vector construction
-├── knn.rs             # Core KNN logic: distance computation, neighbor selection, voting
-├── classifier.rs      # Sequential and parallel classification runners
-├── benchmark.rs       # Timing infrastructure, speedup/efficiency calculations
-└── metrics.rs         # Accuracy computation, results formatting, output reporting
+image-processing/
+├── Cargo.toml
+├── Cargo.lock
+├── README.md
+├── src/
+│   ├── main.rs            # Entry point, CLI argument handling, benchmark orchestration
+│   ├── lib.rs             # Crate root, re-exports public API
+│   ├── data.rs            # CIFAR-10 binary parsing, dataset loading, train/test splitting
+│   ├── preprocess.rs      # Pixel normalization, feature vector construction
+│   ├── knn.rs             # Core KNN logic: distance computation, neighbor selection, voting
+│   ├── sequential.rs      # Single-threaded classification runner
+│   ├── parallel.rs        # std::thread and Rayon classification runners
+│   ├── benchmark.rs       # Timing infrastructure, speedup/efficiency calculations
+│   └── metrics.rs         # Accuracy computation, results formatting, output reporting
+├── data/
+│   └── (see Setup Instructions — dataset files go here, not included in submission)
+├── tests/
+│   └── correctness.rs     # Integration tests validating all three classifiers agree
+├── benchmarks/
+│   └── knn_bench.rs       # Criterion or custom benchmark harness
+└── others/
 ```
+
+**Do not submit** the `target/` directory or any files from `data/`. The `.zip` or `.tar.gz` submission must contain only source files, `Cargo.toml`, `Cargo.lock`, and this README.
 
 **`data.rs`** owns everything related to reading CIFAR-10 binary files. It produces typed structs (`Image`, `Dataset`) that the rest of the system consumes. No other module reads files directly.
 
@@ -61,12 +156,13 @@ src/
 
 **`knn.rs`** contains the distance function and neighbor aggregation logic. It is pure computation — no I/O, no threading. Both the sequential and parallel paths call into this module. This separation ensures correctness can be validated on the sequential path before parallelism is introduced.
 
-**`classifier.rs`** provides three classification entry points:
-- `classify_sequential` — single-threaded baseline
+**`sequential.rs`** contains `classify_sequential` — the single-threaded baseline. This is the reference implementation against which all parallel results are validated.
+
+**`parallel.rs`** contains two entry points:
 - `classify_threaded` — manual `std::thread` implementation
 - `classify_rayon` — Rayon data-parallel implementation
 
-All three accept the same inputs and produce the same output type. Behavioral equivalence is a correctness requirement.
+All three classifiers accept the same inputs and produce the same output type. Behavioral equivalence is a correctness requirement, enforced by integration tests in `tests/`.
 
 **`benchmark.rs`** wraps classification runs with timing and computes derived metrics. It does not modify classification logic.
 
@@ -204,6 +300,8 @@ The final output should demonstrate three things:
 
 **Scalability Trends.** Efficiency numbers are expected to degrade as thread count increases. The benchmark should show where that degradation becomes significant and what it implies about the bottleneck — whether it is compute-bound, memory-bound, or overhead-bound.
 
+**Cross-Hardware Comparison.** The full benchmark suite must be run on two distinct hardware systems. Results from both systems — execution time, speedup, and efficiency tables — will be compared in the final presentation. Hardware specifications (CPU model, core count, RAM) must be recorded for both machines so that performance differences can be interpreted in context. This is a graded requirement.
+
 ---
 
 ## Expected Bottlenecks
@@ -263,3 +361,11 @@ Clean up output formatting, ensure metrics are clearly reported, and write the f
 **Benchmark in release mode.** All reported timing numbers must come from `cargo run --release` or `cargo bench`. Debug builds include bounds checks, disabled inlining, and no auto-vectorization — they do not reflect the algorithm's actual performance. Development can use debug mode; benchmarks cannot.
 
 **K is a parameter, not a constant.** The number of neighbors K should be configurable at runtime. A reasonable default (e.g., K=5 or K=7) should be selected based on accuracy validation on the subset, not assumed.
+
+---
+
+## References
+
+- Krizhevsky, A. (2009). *Learning Multiple Layers of Features from Tiny Images*. University of Toronto. CIFAR-10 dataset available at: https://www.cs.toronto.edu/~kriz/cifar.html
+- The Rayon crate documentation: https://docs.rs/rayon
+- Rust `std::thread` documentation: https://doc.rust-lang.org/std/thread/
