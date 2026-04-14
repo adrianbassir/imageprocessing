@@ -132,7 +132,7 @@ fn k_nearest(query: &[f32], train: &FlatTrainData, k: usize) -> Vec<(f32, u8)> {
     let mut heap: Vec<(f32, u8)> = Vec::with_capacity(k + 1);
 
     for i in 0..train.n {
-        let threshold = heap_max(&heap).min(if heap.len() == k { heap[0].0 } else { f32::INFINITY });
+        let threshold = if heap.len() == k { heap[0].0 } else { f32::INFINITY };
         let dist = squared_distance_bounded(query, train.features_of(i), threshold);
         if dist < threshold {
             heap_push(&mut heap, dist, train.labels[i], k);

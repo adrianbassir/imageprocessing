@@ -46,7 +46,9 @@ pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: u
                 );
                 if dist < thresholds[b] {
                     heap_push(&mut heaps[b], dist, label, k);
-                    thresholds[b] = heap_max(&heaps[b]);
+                    // Only tighten the threshold once the heap is full.
+                    // Before that, keep infinity so no valid candidate is skipped.
+                    thresholds[b] = if heaps[b].len() == k { heap_max(&heaps[b]) } else { f32::INFINITY };
                 }
             }
         }
