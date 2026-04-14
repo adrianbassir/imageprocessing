@@ -18,7 +18,6 @@ pub struct BenchmarkResult {
 }
 
 /// Time a single classification run and return elapsed duration.
-/// `f` should be a closure that executes one full classification pass.
 pub fn time_run<F: FnOnce()>(f: F) -> Duration {
     let start = Instant::now();
     f();
@@ -63,7 +62,7 @@ pub fn run_all_benchmarks(
         efficiency: 1.0,
     });
 
-    // --- Manual std::thread ---
+    // Wrap in Arc once — no cloning during benchmark runs
     let train_arc = Arc::new(
         train
             .iter()
@@ -73,11 +72,19 @@ pub fn run_all_benchmarks(
             })
             .collect::<Vec<_>>(),
     );
+    let test_arc = Arc::new(
+        test.iter()
+            .map(|img| NormalizedImage {
+                label: img.label,
+                features: img.features.clone(),
+            })
+            .collect::<Vec<_>>(),
+    );
 
+    // --- Manual std::thread ---
     for &n in THREAD_COUNTS {
-        let arc = Arc::clone(&train_arc);
         let elapsed = median_time(RUNS, || {
-            classify_threaded(Arc::clone(&arc), test, k, n);
+            classify_threaded(Arc::clone(&train_arc), Arc::clone(&test_arc), k, n);
         });
         let sp = speedup(seq_time, elapsed);
         let eff = efficiency(sp, n);
@@ -95,7 +102,6 @@ pub fn run_all_benchmarks(
         classify_rayon(train, test, k);
     });
     let sp = speedup(seq_time, rayon_elapsed);
-    // Rayon manages its own thread pool; report logical core count as thread count
     let rayon_threads = rayon::current_num_threads();
     let eff = efficiency(sp, rayon_threads);
     results.push(BenchmarkResult {
