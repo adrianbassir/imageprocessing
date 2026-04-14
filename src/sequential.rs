@@ -13,7 +13,7 @@ use crate::preprocess::{FlatTrainData, NormalizedImage};
 /// Heap buffers are allocated once and cleared between tiles to avoid
 /// repeated small allocations in the hot loop.
 pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: usize) -> Vec<u8> {
-    const TILE: usize = 4;
+    const TILE: usize = 32;
     let mut predictions = vec![0u8; test.len()];
 
     // Allocate heap buffers once — reused across all tile iterations via .clear()
