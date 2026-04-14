@@ -53,7 +53,7 @@ pub fn run_all_benchmarks(
     let pb = ProgressBar::new(TOTAL_CONFIGS);
     pb.set_style(
         ProgressStyle::with_template(
-            "{prefix:<22} [{bar:40.cyan/blue}] {pos}/{len} runs  {msg}",
+            "{prefix:<22} [{bar:40.cyan/blue}] {pos}/{len} runs  (~{eta} remaining)  {msg}",
         )
         .unwrap()
         .progress_chars("=> "),
