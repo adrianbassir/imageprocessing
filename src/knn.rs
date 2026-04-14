@@ -145,18 +145,29 @@ fn k_nearest(query: &[f32], train: &FlatTrainData, k: usize) -> Vec<(f32, u8)> {
 
 /// Majority vote over a slice of (distance, label) pairs.
 /// Ties broken by the label of the single nearest neighbor.
+/// Uses a fixed [u32; 10] array — no heap allocation per call.
 fn majority_vote(neighbors: &[(f32, u8)]) -> u8 {
     let mut counts = [0u32; 10];
     for &(_, label) in neighbors {
         counts[label as usize] += 1;
     }
-    let max_count = *counts.iter().max().unwrap();
-    let winners: Vec<u8> = counts
-        .iter()
-        .enumerate()
-        .filter(|&(_, c)| *c == max_count)
-        .map(|(i, _)| i as u8)
-        .collect();
 
-    if winners.len() == 1 { winners[0] } else { neighbors[0].1 }
+    // Find the max count with a single pass — no Vec, no collect
+    let max_count = counts.iter().copied().fold(0, u32::max);
+
+    // Count how many labels share the max — if exactly one, return it directly
+    let mut winner = 10u8; // sentinel: >9 means "tie so far"
+    let mut unique = true;
+    for (label, &c) in counts.iter().enumerate() {
+        if c == max_count {
+            if winner == 10 {
+                winner = label as u8;
+            } else {
+                unique = false;
+                break;
+            }
+        }
+    }
+
+    if unique { winner } else { neighbors[0].1 }
 }
