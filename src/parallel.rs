@@ -13,9 +13,10 @@ use crate::sequential::classify_sequential;
 /// Manual std::thread implementation.
 /// Partitions test into num_threads chunks; each thread runs the tiled
 /// sequential classifier on its chunk, sharing the training data via Arc.
+/// Uses scoped threads so test can be borrowed directly without Arc.
 pub fn classify_threaded(
     train: Arc<FlatTrainData>,
-    test: Arc<Vec<NormalizedImage>>,
+    test: &[NormalizedImage],
     k: usize,
     num_threads: usize,
 ) -> Vec<u8> {
@@ -23,20 +24,21 @@ pub fn classify_threaded(
     let n = test.len();
     let chunk_size = (n + num_threads - 1) / num_threads;
 
-    let handles: Vec<_> = (0..num_threads)
-        .map(|t| {
-            let train = Arc::clone(&train);
-            let test = Arc::clone(&test);
-            let start = t * chunk_size;
-            let end = (start + chunk_size).min(n);
-            thread::spawn(move || classify_sequential(&train, &test[start..end], k))
-        })
-        .collect();
+    thread::scope(|scope| {
+        let handles: Vec<_> = (0..num_threads)
+            .map(|t| {
+                let train = Arc::clone(&train);
+                let start = t * chunk_size;
+                let end = (start + chunk_size).min(n);
+                scope.spawn(move || classify_sequential(&train, &test[start..end], k))
+            })
+            .collect();
 
-    handles
-        .into_iter()
-        .flat_map(|h| h.join().expect("thread panicked"))
-        .collect()
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("thread panicked"))
+            .collect()
+    })
 }
 
 /// Rayon data-parallel implementation.
