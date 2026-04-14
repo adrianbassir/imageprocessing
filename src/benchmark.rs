@@ -5,6 +5,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use indicatif::{ProgressBar, ProgressStyle};
+
 use crate::parallel::{classify_rayon, classify_threaded};
 use crate::preprocess::NormalizedImage;
 use crate::sequential::classify_sequential;
@@ -39,6 +41,9 @@ pub fn efficiency(speedup: f64, num_threads: usize) -> f64 {
 const RUNS: usize = 3;
 const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
 
+// Total number of timed runs: 1 sequential + 4 threaded + 1 rayon = 6 configs × RUNS each
+const TOTAL_CONFIGS: u64 = (1 + 4 + 1) * RUNS as u64;
+
 /// Run all configurations (sequential, threaded at 1/2/4/8, Rayon) and
 /// collect BenchmarkResults. Each configuration is run RUNS times;
 /// the median time is recorded.
@@ -47,13 +52,22 @@ pub fn run_all_benchmarks(
     test: &[NormalizedImage],
     k: usize,
 ) -> Vec<BenchmarkResult> {
+    let pb = ProgressBar::new(TOTAL_CONFIGS);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{prefix:<22} [{bar:40.cyan/blue}] {pos}/{len} runs  {msg}",
+        )
+        .unwrap()
+        .progress_chars("=> "),
+    );
+    pb.set_prefix("Benchmarking");
+
     let mut results = Vec::new();
 
     // --- Sequential baseline ---
-    let seq_time = median_time(RUNS, || {
+    let seq_time = median_time(RUNS, &pb, "sequential", || {
         classify_sequential(train, test, k);
     });
-
     results.push(BenchmarkResult {
         label: "sequential".to_string(),
         num_threads: 1,
@@ -83,13 +97,14 @@ pub fn run_all_benchmarks(
 
     // --- Manual std::thread ---
     for &n in THREAD_COUNTS {
-        let elapsed = median_time(RUNS, || {
+        let label = format!("threaded-{n}");
+        let elapsed = median_time(RUNS, &pb, &label, || {
             classify_threaded(Arc::clone(&train_arc), Arc::clone(&test_arc), k, n);
         });
         let sp = speedup(seq_time, elapsed);
         let eff = efficiency(sp, n);
         results.push(BenchmarkResult {
-            label: format!("threaded-{n}"),
+            label,
             num_threads: n,
             elapsed,
             speedup: sp,
@@ -98,7 +113,7 @@ pub fn run_all_benchmarks(
     }
 
     // --- Rayon ---
-    let rayon_elapsed = median_time(RUNS, || {
+    let rayon_elapsed = median_time(RUNS, &pb, "rayon", || {
         classify_rayon(train, test, k);
     });
     let sp = speedup(seq_time, rayon_elapsed);
@@ -112,12 +127,20 @@ pub fn run_all_benchmarks(
         efficiency: eff,
     });
 
+    pb.finish_with_message("done");
     results
 }
 
-/// Run `f` `n` times and return the median duration.
-fn median_time<F: Fn()>(n: usize, f: F) -> Duration {
-    let mut times: Vec<Duration> = (0..n).map(|_| time_run(&f)).collect();
+/// Run `f` `n` times, ticking the progress bar each run, and return the median duration.
+fn median_time<F: Fn()>(n: usize, pb: &ProgressBar, label: &str, f: F) -> Duration {
+    let mut times: Vec<Duration> = (0..n)
+        .map(|i| {
+            pb.set_message(format!("{label} (run {}/{})", i + 1, n));
+            let t = time_run(&f);
+            pb.inc(1);
+            t
+        })
+        .collect();
     times.sort();
     times[n / 2]
 }

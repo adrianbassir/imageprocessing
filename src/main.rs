@@ -4,11 +4,11 @@
 // Usage:
 //   cargo run --release [data_dir] [k] [train_limit] [test_limit]
 //
-// Defaults:
+// Defaults (subset for development — use 0 for full dataset):
 //   data_dir    = "data/cifar-10-batches-bin"
 //   k           = 5
-//   train_limit = 0  (full 50000)
-//   test_limit  = 0  (full 10000)
+//   train_limit = 10000
+//   test_limit  = 500
 
 use std::sync::Arc;
 
@@ -74,8 +74,8 @@ fn main() {
 
     let data_dir = args.get(1).map(String::as_str).unwrap_or("data/cifar-10-batches-bin");
     let k: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5);
-    let train_limit: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let test_limit: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let train_limit: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(10_000);
+    let test_limit: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(500);
 
     println!("Loading dataset from '{data_dir}'...");
     let dataset = load_dataset(data_dir);
