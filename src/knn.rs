@@ -14,13 +14,61 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
         .sqrt()
 }
 
-/// Squared Euclidean distance with early abandonment.
-/// Bails out as soon as the partial sum exceeds `threshold`.
+/// Squared Euclidean distance with chunked early abandonment.
+///
+/// Processes 16 floats per chunk with no branch inside — the compiler can emit
+/// AVX2 instructions across the full chunk. Threshold is checked once per chunk
+/// (every 16 floats) rather than every float, giving 192 checks instead of 3072
+/// while still terminating early on distant candidates.
+///
+/// 8 independent accumulators break the reduction dependency chain so the CPU
+/// can execute multiple FMA operations in parallel within each chunk.
 #[inline(always)]
 fn squared_distance_bounded(a: &[f32], b: &[f32], threshold: f32) -> f32 {
+    const CHUNK: usize = 16;
+    let full_chunks = a.len() / CHUNK;
     let mut sum = 0.0f32;
-    for (x, y) in a.iter().zip(b.iter()) {
-        sum += (x - y) * (x - y);
+
+    for c in 0..full_chunks {
+        let base = c * CHUNK;
+        let a_chunk = &a[base..base + CHUNK];
+        let b_chunk = &b[base..base + CHUNK];
+
+        // 8 independent accumulators — breaks the FP reduction dependency chain.
+        // LLVM can schedule these as independent FMA lanes.
+        let mut acc0 = 0.0f32; let mut acc1 = 0.0f32;
+        let mut acc2 = 0.0f32; let mut acc3 = 0.0f32;
+        let mut acc4 = 0.0f32; let mut acc5 = 0.0f32;
+        let mut acc6 = 0.0f32; let mut acc7 = 0.0f32;
+
+        let d0 = a_chunk[0]  - b_chunk[0];  acc0 += d0 * d0;
+        let d1 = a_chunk[1]  - b_chunk[1];  acc1 += d1 * d1;
+        let d2 = a_chunk[2]  - b_chunk[2];  acc2 += d2 * d2;
+        let d3 = a_chunk[3]  - b_chunk[3];  acc3 += d3 * d3;
+        let d4 = a_chunk[4]  - b_chunk[4];  acc4 += d4 * d4;
+        let d5 = a_chunk[5]  - b_chunk[5];  acc5 += d5 * d5;
+        let d6 = a_chunk[6]  - b_chunk[6];  acc6 += d6 * d6;
+        let d7 = a_chunk[7]  - b_chunk[7];  acc7 += d7 * d7;
+        let d8 = a_chunk[8]  - b_chunk[8];  acc0 += d8 * d8;
+        let d9 = a_chunk[9]  - b_chunk[9];  acc1 += d9 * d9;
+        let d10 = a_chunk[10] - b_chunk[10]; acc2 += d10 * d10;
+        let d11 = a_chunk[11] - b_chunk[11]; acc3 += d11 * d11;
+        let d12 = a_chunk[12] - b_chunk[12]; acc4 += d12 * d12;
+        let d13 = a_chunk[13] - b_chunk[13]; acc5 += d13 * d13;
+        let d14 = a_chunk[14] - b_chunk[14]; acc6 += d14 * d14;
+        let d15 = a_chunk[15] - b_chunk[15]; acc7 += d15 * d15;
+
+        sum += (acc0 + acc1) + (acc2 + acc3) + (acc4 + acc5) + (acc6 + acc7);
+
+        if sum >= threshold {
+            return threshold;
+        }
+    }
+
+    // Remainder (3072 % 16 == 0 for CIFAR-10, so this path is rarely taken)
+    for i in (full_chunks * CHUNK)..a.len() {
+        let d = a[i] - b[i];
+        sum += d * d;
         if sum >= threshold {
             return threshold;
         }
