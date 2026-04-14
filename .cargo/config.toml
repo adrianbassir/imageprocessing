@@ -1,0 +1,4 @@
+[build]
+# Enable all CPU-specific instruction sets (AVX2, FMA, etc.) on the host machine.
+# Produces non-portable binaries — do not distribute, but maximizes performance for benchmarking.
+rustflags = ["-C", "target-cpu=native"]
