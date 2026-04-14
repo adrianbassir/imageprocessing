@@ -24,7 +24,7 @@ pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
 /// 8 independent accumulators break the reduction dependency chain so the CPU
 /// can execute multiple FMA operations in parallel within each chunk.
 #[inline(always)]
-fn squared_distance_bounded(a: &[f32], b: &[f32], threshold: f32) -> f32 {
+pub fn squared_distance_bounded(a: &[f32], b: &[f32], threshold: f32) -> f32 {
     const CHUNK: usize = 16;
     let full_chunks = a.len() / CHUNK;
     let mut sum = 0.0f32;
@@ -83,46 +83,59 @@ pub fn classify(query: &NormalizedImage, train: &FlatTrainData, k: usize) -> u8 
     majority_vote(&neighbors)
 }
 
+/// Push a (distance, label) pair into a max-heap of capacity k.
+/// If the heap exceeds k, the largest element is removed.
+pub fn heap_push(heap: &mut Vec<(f32, u8)>, dist: f32, label: u8, k: usize) {
+    heap.push((dist, label));
+    let mut idx = heap.len() - 1;
+    while idx > 0 {
+        let parent = (idx - 1) / 2;
+        if heap[parent].0 < heap[idx].0 {
+            heap.swap(parent, idx);
+            idx = parent;
+        } else {
+            break;
+        }
+    }
+    if heap.len() > k {
+        let last = heap.len() - 1;
+        heap.swap(0, last);
+        heap.pop();
+        let mut idx = 0;
+        loop {
+            let left = 2 * idx + 1;
+            let right = 2 * idx + 2;
+            let mut largest = idx;
+            if left < heap.len() && heap[left].0 > heap[largest].0 { largest = left; }
+            if right < heap.len() && heap[right].0 > heap[largest].0 { largest = right; }
+            if largest == idx { break; }
+            heap.swap(idx, largest);
+            idx = largest;
+        }
+    }
+}
+
+/// Return the current worst (largest) distance in the heap, or infinity if empty.
+#[inline(always)]
+pub fn heap_max(heap: &[(f32, u8)]) -> f32 {
+    if heap.is_empty() { f32::INFINITY } else { heap[0].0 }
+}
+
+/// Majority vote over a sorted (distance, label) slice — tie-break to nearest.
+pub fn knn_vote(neighbors: &[(f32, u8)]) -> u8 {
+    majority_vote(neighbors)
+}
+
 /// Select the k nearest training images to `query` by squared Euclidean distance.
 /// Uses a fixed-size max-heap with early abandonment to skip distant candidates.
 fn k_nearest(query: &[f32], train: &FlatTrainData, k: usize) -> Vec<(f32, u8)> {
     let mut heap: Vec<(f32, u8)> = Vec::with_capacity(k + 1);
 
     for i in 0..train.n {
-        let threshold = if heap.len() == k { heap[0].0 } else { f32::INFINITY };
+        let threshold = heap_max(&heap).min(if heap.len() == k { heap[0].0 } else { f32::INFINITY });
         let dist = squared_distance_bounded(query, train.features_of(i), threshold);
-
         if dist < threshold {
-            heap.push((dist, train.labels[i]));
-            // Bubble up
-            let mut idx = heap.len() - 1;
-            while idx > 0 {
-                let parent = (idx - 1) / 2;
-                if heap[parent].0 < heap[idx].0 {
-                    heap.swap(parent, idx);
-                    idx = parent;
-                } else {
-                    break;
-                }
-            }
-            // Remove root (largest) if over capacity
-            if heap.len() > k {
-                let last = heap.len() - 1;
-                heap.swap(0, last);
-                heap.pop();
-                // Sift down
-                let mut idx = 0;
-                loop {
-                    let left = 2 * idx + 1;
-                    let right = 2 * idx + 2;
-                    let mut largest = idx;
-                    if left < heap.len() && heap[left].0 > heap[largest].0 { largest = left; }
-                    if right < heap.len() && heap[right].0 > heap[largest].0 { largest = right; }
-                    if largest == idx { break; }
-                    heap.swap(idx, largest);
-                    idx = largest;
-                }
-            }
+            heap_push(&mut heap, dist, train.labels[i], k);
         }
     }
 
