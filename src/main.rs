@@ -16,10 +16,10 @@ use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 
 use imgProcessing::benchmark::run_all_benchmarks;
 use imgProcessing::data::load_dataset;
-use imgProcessing::knn::classify;
 use imgProcessing::metrics::{accuracy, print_accuracy, print_benchmark_table};
 use imgProcessing::parallel::{classify_rayon, classify_threaded};
 use imgProcessing::preprocess::{flatten, normalize, NormalizedImage};
+use imgProcessing::sequential::classify_sequential;
 
 fn run_with_spinner<T, F: FnOnce() -> T>(label: &str, f: F) -> T {
     let pb = ProgressBar::new_spinner();
@@ -46,25 +46,6 @@ fn progress_bar(len: u64, prefix: &str) -> ProgressBar {
     );
     pb.set_prefix(prefix.to_string());
     pb
-}
-
-fn classify_with_progress(
-    label: &str,
-    train: &imgProcessing::preprocess::FlatTrainData,
-    test: &[NormalizedImage],
-    k: usize,
-) -> Vec<u8> {
-    let pb = progress_bar(test.len() as u64, label);
-    let preds = test
-        .iter()
-        .map(|img| {
-            let pred = classify(img, train, k);
-            pb.inc(1);
-            pred
-        })
-        .collect();
-    pb.finish();
-    preds
 }
 
 fn main() {
@@ -122,7 +103,9 @@ fn main() {
     // --- Correctness check ---
     println!("Correctness check:");
 
-    let seq_preds = classify_with_progress("  sequential", &train, &test_arc, k);
+    let seq_preds = run_with_spinner("  sequential", || {
+        classify_sequential(&train, &test_arc, k)
+    });
     print_accuracy("  sequential", accuracy(&seq_preds, &ground_truth));
 
     let train_arc = Arc::new(imgProcessing::preprocess::FlatTrainData {
