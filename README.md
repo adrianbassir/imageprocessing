@@ -20,6 +20,20 @@ This project implements image classification using the K-Nearest Neighbors (KNN)
 
 ---
 
+## Hardware Specifications
+
+Benchmarks were run on two machines:
+
+| | System 1 | System 2 |
+|---|---|---|
+| **Owner** | | |
+| **CPU** | | |
+| **Physical cores** | | |
+| **RAM** | | |
+| **OS** | | |
+
+---
+
 ## Prerequisites
 
 **Rust toolchain:** rustc 1.75.0 or later. Install via [rustup](https://rustup.rs/).
@@ -80,7 +94,26 @@ cargo build --release
 cargo run --release
 ```
 
-By default this runs all three classifiers (sequential, threaded, Rayon) and prints a benchmark summary. Optional flags for subset size, thread count, and K value will be documented once the CLI interface is finalized.
+By default this runs all three classifiers (sequential, threaded, Rayon) and prints a benchmark summary.
+
+**Optional positional arguments:**
+
+```
+cargo run --release [data_dir] [k] [train_limit] [test_limit]
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `data_dir` | `data/cifar-10-batches-bin` | Path to the folder containing the `.bin` batch files |
+| `k` | `5` | Number of nearest neighbors |
+| `train_limit` | `0` (full 50,000) | Cap on training images; `0` means use all |
+| `test_limit` | `0` (full 10,000) | Cap on test images; `0` means use all |
+
+**Example — quick smoke test on a small subset:**
+
+```bash
+cargo run --release data/cifar-10-batches-bin 5 1000 200
+```
 
 ### 6. Run tests
 
@@ -178,17 +211,17 @@ Parse CIFAR-10 binary files into structured records. Each record contains a labe
 
 ### 2. Flatten and Normalize
 
-Convert each image's pixel data into a flat `Vec<f32>`. Normalize pixel values from `[0, 255]` to `[0.0, 1.0]` by dividing by 255.0. This normalization is applied uniformly to both training and test images. The result is stored once per image at load time.
+Convert each image's pixel data into a flat `Vec<f32>`. Per-channel z-score normalization is applied: the mean and standard deviation for each of the three RGB channels are computed from the training set, then every pixel is transformed as `(pixel / 255.0 - mean) / std`. Training-set statistics are used for both train and test images (no data leakage). The result is stored once per image at load time.
 
 ### 3. Compute Euclidean Distances
 
-For a query image `q` and training image `t`, compute:
+For a query image `q` and training image `t`, the squared Euclidean distance is computed:
 
 ```
-distance(q, t) = sqrt( sum( (q[i] - t[i])^2 ) for i in 0..3072 )
+distance(q, t) = sum( (q[i] - t[i])^2 ) for i in 0..3072
 ```
 
-This is the core computation that parallelization targets. Each distance calculation is independent — there is no dependency between distance computations across training images.
+The square root is omitted in the implementation — it is monotonic and does not affect the ranking of neighbors, so skipping it saves one operation per distance computation without changing the result. This is the core computation that parallelization targets. Each distance calculation is independent — there is no dependency between distance computations across training images.
 
 ### 4. Select K Nearest Neighbors
 
@@ -294,7 +327,7 @@ Results are presented in a table comparing execution time, speedup, and efficien
 
 The final output should demonstrate three things:
 
-**Correctness.** The sequential, threaded, and Rayon implementations must produce identical classification results on the same inputs. Accuracy is measured on the test set and reported alongside performance metrics. The accuracy value itself is expected to be moderate — KNN on raw pixel values is not a high-accuracy classifier — but it must be consistent across all implementations.
+**Correctness.** The sequential, threaded, and Rayon implementations must produce identical classification results on the same inputs. Accuracy is measured on the test set and reported alongside performance metrics. The accuracy value itself is expected to be moderate — the published baseline for raw-pixel KNN on CIFAR-10 is approximately 32–38%, significantly lower than KNN on simpler datasets like MNIST (~95–97%) because CIFAR-10 has high intra-class variation that pixel-space distance cannot capture. Accuracy must be consistent across all implementations.
 
 **Performance Differences.** The parallel implementations should show meaningful speedup over the sequential baseline, particularly at 4 and 8 threads. The magnitude and shape of speedup curves will reflect real costs: thread creation overhead, memory bandwidth contention, and Rayon's scheduling efficiency.
 

@@ -18,7 +18,7 @@ use imgProcessing::benchmark::run_all_benchmarks;
 use imgProcessing::data::load_dataset;
 use imgProcessing::metrics::{accuracy, print_accuracy, print_benchmark_table};
 use imgProcessing::parallel::{classify_rayon, classify_threaded};
-use imgProcessing::preprocess::{flatten, normalize, NormalizedImage};
+use imgProcessing::preprocess::{compute_channel_stats, flatten, normalize_all_zscore, NormalizedImage};
 use imgProcessing::sequential::classify_sequential;
 
 fn progress_bar(len: u64, prefix: &str) -> ProgressBar {
@@ -83,16 +83,29 @@ fn main() {
         test_raw.len()
     );
 
+    // --- Compute per-channel statistics from training set ---
+    // z-score normalization: (x - mean) / std per channel.
+    // Using training-set stats for both train and test (no data leakage).
+    print!("Computing channel statistics... ");
+    let stats = compute_channel_stats(train_raw);
+    println!(
+        "mean=[{:.4}, {:.4}, {:.4}]  std=[{:.4}, {:.4}, {:.4}]",
+        stats.mean[0], stats.mean[1], stats.mean[2],
+        stats.std[0],  stats.std[1],  stats.std[2],
+    );
+
     // --- Normalize ---
     let pb = progress_bar(train_raw.len() as u64 + test_raw.len() as u64, "Normalizing");
-    let train_normalized: Vec<NormalizedImage> = train_raw
-        .iter()
-        .map(|img| { pb.inc(1); normalize(img) })
-        .collect();
-    let test: Vec<NormalizedImage> = test_raw
-        .iter()
-        .map(|img| { pb.inc(1); normalize(img) })
-        .collect();
+    let train_normalized: Vec<NormalizedImage> = {
+        let v = normalize_all_zscore(train_raw, &stats);
+        pb.inc(train_raw.len() as u64);
+        v
+    };
+    let test: Vec<NormalizedImage> = {
+        let v = normalize_all_zscore(test_raw, &stats);
+        pb.inc(test_raw.len() as u64);
+        v
+    };
     pb.finish();
 
     // --- Flatten training data for cache-efficient KNN ---
