@@ -29,7 +29,7 @@ fn sequential_and_threaded_agree() {
     let k = 3;
 
     let seq = classify_sequential(&train, &test, k);
-    let threaded = classify_threaded(Arc::new(make_dataset(200, 32)), &test, k, 4);
+    let threaded = classify_threaded(Arc::new(make_dataset(200, 32)), Arc::new(make_dataset(20, 32)), k, 4);
 
     assert_eq!(seq, threaded, "sequential and threaded-4 predictions differ");
 }

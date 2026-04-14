@@ -117,29 +117,25 @@ fn main() {
 
     let ground_truth: Vec<u8> = test.iter().map(|img| img.label).collect();
 
+    // Wrap in Arc once — shared across correctness check and benchmarks with no cloning
+    let train_arc = Arc::new(train);
+    let test_arc = Arc::new(test);
+
     // --- Correctness check ---
     println!("Correctness check:");
 
-    let seq_preds = classify_with_progress("  sequential", &train, &test, k);
+    let seq_preds = classify_with_progress("  sequential", &train_arc, &test_arc, k);
     print_accuracy("  sequential", accuracy(&seq_preds, &ground_truth));
 
-    let train_arc = Arc::new(
-        train
-            .iter()
-            .map(|img| NormalizedImage {
-                label: img.label,
-                features: img.features.clone(),
-            })
-            .collect::<Vec<_>>(),
-    );
-
     let threaded_preds = run_with_spinner("  threaded-4", || {
-        classify_threaded(Arc::clone(&train_arc), &test, k, 4)
+        classify_threaded(Arc::clone(&train_arc), Arc::clone(&test_arc), k, 4)
     });
     assert_eq!(seq_preds, threaded_preds, "sequential and threaded predictions differ");
     print_accuracy("  threaded-4", accuracy(&threaded_preds, &ground_truth));
 
-    let rayon_preds = run_with_spinner("  rayon", || classify_rayon(&train, &test, k));
+    let rayon_preds = run_with_spinner("  rayon", || {
+        classify_rayon(&train_arc, &test_arc, k)
+    });
     assert_eq!(seq_preds, rayon_preds, "sequential and rayon predictions differ");
     print_accuracy("  rayon", accuracy(&rayon_preds, &ground_truth));
 
@@ -147,6 +143,6 @@ fn main() {
 
     // --- Benchmarks ---
     println!("Running benchmarks (3 runs each, median reported)...");
-    let results = run_all_benchmarks(&train, &test, k);
+    let results = run_all_benchmarks(&train_arc, &test_arc, k);
     print_benchmark_table(&results);
 }

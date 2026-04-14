@@ -4,13 +4,29 @@
 
 use crate::preprocess::NormalizedImage;
 
-/// Euclidean distance between two feature vectors of equal length.
+/// Squared Euclidean distance between two feature vectors.
+/// Skipping sqrt is valid for ranking — sqrt is monotonic so order is preserved.
 pub fn euclidean_distance(a: &[f32], b: &[f32]) -> f32 {
     a.iter()
         .zip(b.iter())
         .map(|(x, y)| (x - y) * (x - y))
         .sum::<f32>()
         .sqrt()
+}
+
+/// Squared Euclidean distance with early abandonment.
+/// If the running sum exceeds `threshold`, returns `threshold` immediately.
+/// Used internally by k_nearest to skip candidates that can't be in the top-k.
+#[inline]
+fn squared_distance_bounded(a: &[f32], b: &[f32], threshold: f32) -> f32 {
+    let mut sum = 0.0f32;
+    for (x, y) in a.iter().zip(b.iter()) {
+        sum += (x - y) * (x - y);
+        if sum >= threshold {
+            return threshold;
+        }
+    }
+    sum
 }
 
 /// Classify a single query image against the full training set.
@@ -20,22 +36,69 @@ pub fn classify(query: &NormalizedImage, train: &[NormalizedImage], k: usize) ->
     majority_vote(&neighbors)
 }
 
-/// Select the k nearest training images to `query` by Euclidean distance.
+/// Select the k nearest training images to `query` by squared Euclidean distance.
 /// Returns (distance, label) pairs sorted ascending by distance.
+/// Uses a fixed-size max-heap to avoid allocating all distances up front,
+/// and early abandonment to skip candidates outside the current top-k.
 fn k_nearest(query: &[f32], train: &[NormalizedImage], k: usize) -> Vec<(f32, u8)> {
-    let mut distances: Vec<(f32, u8)> = train
-        .iter()
-        .map(|img| (euclidean_distance(query, &img.features), img.label))
-        .collect();
+    // Use a fixed-capacity buffer as a max-heap (largest distance at top).
+    // Once full, any candidate with distance >= heap max is skipped entirely.
+    let mut heap: Vec<(f32, u8)> = Vec::with_capacity(k + 1);
 
-    // Partial sort: only need the k smallest, so use select_nth_unstable for efficiency.
-    // Fall back to full sort if k >= len (e.g. in tests with tiny datasets).
-    if k < distances.len() {
-        distances.select_nth_unstable_by(k, |a, b| a.0.partial_cmp(&b.0).unwrap());
-        distances.truncate(k);
+    for img in train {
+        // Threshold: if heap is full, use worst distance so far; else infinity.
+        let threshold = if heap.len() == k {
+            heap[0].0 // max-heap: root is the largest distance
+        } else {
+            f32::INFINITY
+        };
+
+        let dist = squared_distance_bounded(query, &img.features, threshold);
+
+        if dist < threshold {
+            // Push and re-heapify as a max-heap by distance
+            heap.push((dist, img.label));
+            // Bubble up to maintain max-heap invariant
+            let mut i = heap.len() - 1;
+            while i > 0 {
+                let parent = (i - 1) / 2;
+                if heap[parent].0 < heap[i].0 {
+                    heap.swap(parent, i);
+                    i = parent;
+                } else {
+                    break;
+                }
+            }
+            // If over capacity, remove the root (largest)
+            if heap.len() > k {
+                let last = heap.len() - 1;
+                heap.swap(0, last);
+                heap.pop();
+                // Sift down to restore max-heap
+                let mut i = 0;
+                loop {
+                    let left = 2 * i + 1;
+                    let right = 2 * i + 2;
+                    let mut largest = i;
+                    if left < heap.len() && heap[left].0 > heap[largest].0 {
+                        largest = left;
+                    }
+                    if right < heap.len() && heap[right].0 > heap[largest].0 {
+                        largest = right;
+                    }
+                    if largest == i {
+                        break;
+                    }
+                    heap.swap(i, largest);
+                    i = largest;
+                }
+            }
+        }
     }
-    distances.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-    distances
+
+    // Sort ascending by distance for majority_vote
+    heap.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+    heap
 }
 
 /// Majority vote over a slice of (distance, label) pairs.
