@@ -6,12 +6,10 @@
 use std::sync::Arc;
 
 use imgProcessing::parallel::{classify_rayon, classify_threaded};
-use imgProcessing::preprocess::NormalizedImage;
+use imgProcessing::preprocess::{flatten, NormalizedImage};
 use imgProcessing::sequential::classify_sequential;
 
-/// Build a small synthetic dataset of `n` images with `dims` features each.
-/// Labels cycle 0..10. Features are random-ish but deterministic.
-fn make_dataset(n: usize, dims: usize) -> Vec<NormalizedImage> {
+fn make_normalized(n: usize, dims: usize) -> Vec<NormalizedImage> {
     (0..n)
         .map(|i| NormalizedImage {
             label: (i % 10) as u8,
@@ -24,21 +22,31 @@ fn make_dataset(n: usize, dims: usize) -> Vec<NormalizedImage> {
 
 #[test]
 fn sequential_and_threaded_agree() {
-    let train = make_dataset(200, 32);
-    let test = make_dataset(20, 32);
+    let train_norm = make_normalized(200, 32);
+    let test = make_normalized(20, 32);
     let k = 3;
 
+    let train = flatten(&train_norm);
+    let train_arc = Arc::new(imgProcessing::preprocess::FlatTrainData {
+        features: train.features.clone(),
+        labels: train.labels.clone(),
+        dims: train.dims,
+        n: train.n,
+    });
+
     let seq = classify_sequential(&train, &test, k);
-    let threaded = classify_threaded(Arc::new(make_dataset(200, 32)), Arc::new(make_dataset(20, 32)), k, 4);
+    let threaded = classify_threaded(train_arc, Arc::new(make_normalized(20, 32)), k, 4);
 
     assert_eq!(seq, threaded, "sequential and threaded-4 predictions differ");
 }
 
 #[test]
 fn sequential_and_rayon_agree() {
-    let train = make_dataset(200, 32);
-    let test = make_dataset(20, 32);
+    let train_norm = make_normalized(200, 32);
+    let test = make_normalized(20, 32);
     let k = 3;
+
+    let train = flatten(&train_norm);
 
     let seq = classify_sequential(&train, &test, k);
     let rayon = classify_rayon(&train, &test, k);
