@@ -5,3 +5,10 @@ edition = "2024"
 
 [dependencies]
 rayon = "1.10"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "knn_bench"
+harness = false
