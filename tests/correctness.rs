@@ -35,7 +35,7 @@ fn sequential_and_threaded_agree() {
     });
 
     let seq = classify_sequential(&train, &test, k);
-    let threaded = classify_threaded(train_arc, Arc::new(make_normalized(20, 32)), k, 4);
+    let threaded = classify_threaded(train_arc, &test, k, 4);
 
     assert_eq!(seq, threaded, "sequential and threaded-4 predictions differ");
 }

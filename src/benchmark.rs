@@ -80,20 +80,12 @@ pub fn run_all_benchmarks(
         dims: train.dims,
         n: train.n,
     });
-    let test_arc = Arc::new(
-        test.iter()
-            .map(|img| NormalizedImage {
-                label: img.label,
-                features: img.features.clone(),
-            })
-            .collect::<Vec<_>>(),
-    );
 
     // --- Manual std::thread ---
     for &n in THREAD_COUNTS {
         let label = format!("threaded-{n}");
         let elapsed = median_time(RUNS, &pb, &label, || {
-            classify_threaded(Arc::clone(&train_arc), Arc::clone(&test_arc), k, n);
+            classify_threaded(Arc::clone(&train_arc), test, k, n);
         });
         let sp = speedup(seq_time, elapsed);
         let eff = efficiency(sp, n);
