@@ -19,9 +19,8 @@ use imgProcessing::data::load_dataset;
 use imgProcessing::knn::classify;
 use imgProcessing::metrics::{accuracy, print_accuracy, print_benchmark_table};
 use imgProcessing::parallel::{classify_rayon, classify_threaded};
-use imgProcessing::preprocess::NormalizedImage;
+use imgProcessing::preprocess::{flatten, normalize, NormalizedImage};
 
-/// Run a parallel classifier closure, showing a spinner while it works.
 fn run_with_spinner<T, F: FnOnce() -> T>(label: &str, f: F) -> T {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -49,10 +48,9 @@ fn progress_bar(len: u64, prefix: &str) -> ProgressBar {
     pb
 }
 
-/// Classify test images one at a time, ticking a progress bar after each.
 fn classify_with_progress(
     label: &str,
-    train: &[NormalizedImage],
+    train: &imgProcessing::preprocess::FlatTrainData,
     test: &[NormalizedImage],
     k: usize,
 ) -> Vec<u8> {
@@ -104,28 +102,35 @@ fn main() {
 
     // --- Normalize ---
     let pb = progress_bar(train_raw.len() as u64 + test_raw.len() as u64, "Normalizing");
-    let train: Vec<NormalizedImage> = train_raw
+    let train_normalized: Vec<NormalizedImage> = train_raw
         .iter()
-        .map(|img| { pb.inc(1); imgProcessing::preprocess::normalize(img) })
+        .map(|img| { pb.inc(1); normalize(img) })
         .collect();
     let test: Vec<NormalizedImage> = test_raw
         .iter()
-        .map(|img| { pb.inc(1); imgProcessing::preprocess::normalize(img) })
+        .map(|img| { pb.inc(1); normalize(img) })
         .collect();
     pb.finish();
+
+    // --- Flatten training data for cache-efficient KNN ---
+    let train = flatten(&train_normalized);
     println!();
 
     let ground_truth: Vec<u8> = test.iter().map(|img| img.label).collect();
-
-    // Wrap in Arc once — shared across correctness check and benchmarks with no cloning
-    let train_arc = Arc::new(train);
     let test_arc = Arc::new(test);
 
     // --- Correctness check ---
     println!("Correctness check:");
 
-    let seq_preds = classify_with_progress("  sequential", &train_arc, &test_arc, k);
+    let seq_preds = classify_with_progress("  sequential", &train, &test_arc, k);
     print_accuracy("  sequential", accuracy(&seq_preds, &ground_truth));
+
+    let train_arc = Arc::new(imgProcessing::preprocess::FlatTrainData {
+        features: train.features.clone(),
+        labels: train.labels.clone(),
+        dims: train.dims,
+        n: train.n,
+    });
 
     let threaded_preds = run_with_spinner("  threaded-4", || {
         classify_threaded(Arc::clone(&train_arc), Arc::clone(&test_arc), k, 4)
@@ -134,7 +139,7 @@ fn main() {
     print_accuracy("  threaded-4", accuracy(&threaded_preds, &ground_truth));
 
     let rayon_preds = run_with_spinner("  rayon", || {
-        classify_rayon(&train_arc, &test_arc, k)
+        classify_rayon(&train, &test_arc, k)
     });
     assert_eq!(seq_preds, rayon_preds, "sequential and rayon predictions differ");
     print_accuracy("  rayon", accuracy(&rayon_preds, &ground_truth));
@@ -143,6 +148,6 @@ fn main() {
 
     // --- Benchmarks ---
     println!("Running benchmarks (3 runs each, median reported)...");
-    let results = run_all_benchmarks(&train_arc, &test_arc, k);
+    let results = run_all_benchmarks(&train, &test_arc, k);
     print_benchmark_table(&results);
 }

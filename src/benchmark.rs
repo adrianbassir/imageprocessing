@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::parallel::{classify_rayon, classify_threaded};
-use crate::preprocess::NormalizedImage;
+use crate::preprocess::{FlatTrainData, NormalizedImage};
 use crate::sequential::classify_sequential;
 
 pub struct BenchmarkResult {
@@ -40,15 +40,13 @@ pub fn efficiency(speedup: f64, num_threads: usize) -> f64 {
 
 const RUNS: usize = 3;
 const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
-
-// Total number of timed runs: 1 sequential + 4 threaded + 1 rayon = 6 configs × RUNS each
 const TOTAL_CONFIGS: u64 = (1 + 4 + 1) * RUNS as u64;
 
 /// Run all configurations (sequential, threaded at 1/2/4/8, Rayon) and
 /// collect BenchmarkResults. Each configuration is run RUNS times;
 /// the median time is recorded.
 pub fn run_all_benchmarks(
-    train: &[NormalizedImage],
+    train: &FlatTrainData,
     test: &[NormalizedImage],
     k: usize,
 ) -> Vec<BenchmarkResult> {
@@ -76,16 +74,12 @@ pub fn run_all_benchmarks(
         efficiency: 1.0,
     });
 
-    // Wrap in Arc once — no cloning during benchmark runs
-    let train_arc = Arc::new(
-        train
-            .iter()
-            .map(|img| NormalizedImage {
-                label: img.label,
-                features: img.features.clone(),
-            })
-            .collect::<Vec<_>>(),
-    );
+    let train_arc = Arc::new(FlatTrainData {
+        features: train.features.clone(),
+        labels: train.labels.clone(),
+        dims: train.dims,
+        n: train.n,
+    });
     let test_arc = Arc::new(
         test.iter()
             .map(|img| NormalizedImage {

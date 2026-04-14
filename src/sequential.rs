@@ -2,10 +2,10 @@
 // Reference implementation — all parallel results are validated against this.
 
 use crate::knn::classify;
-use crate::preprocess::NormalizedImage;
+use crate::preprocess::{FlatTrainData, NormalizedImage};
 
 /// Classify every image in `test` against `train` using k nearest neighbors.
 /// Returns predicted labels in the same order as `test`.
-pub fn classify_sequential(train: &[NormalizedImage], test: &[NormalizedImage], k: usize) -> Vec<u8> {
+pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: usize) -> Vec<u8> {
     test.iter().map(|img| classify(img, train, k)).collect()
 }
