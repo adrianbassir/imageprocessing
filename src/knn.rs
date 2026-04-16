@@ -87,17 +87,21 @@ pub fn classify(query: &NormalizedImage, train: &FlatTrainData, k: usize) -> u8 
 /// If the heap exceeds k, the largest element is removed.
 pub fn heap_push(heap: &mut Vec<(f32, u8)>, dist: f32, label: u8, k: usize) {
     heap.push((dist, label));
+
+    // Sift-up: bubble the new element toward the root until the max-heap property holds
     let mut idx = heap.len() - 1;
     while idx > 0 {
-        let parent = (idx - 1) / 2;
+        let parent = (idx - 1) / 2; // integer parent index in a binary heap
         if heap[parent].0 < heap[idx].0 {
             heap.swap(parent, idx);
             idx = parent;
         } else {
-            break;
+            break; // heap property restored
         }
     }
+
     if heap.len() > k {
+        // Remove the root (largest distance): swap with last element, pop, then sift-down
         let last = heap.len() - 1;
         heap.swap(0, last);
         heap.pop();
@@ -106,9 +110,10 @@ pub fn heap_push(heap: &mut Vec<(f32, u8)>, dist: f32, label: u8, k: usize) {
             let left = 2 * idx + 1;
             let right = 2 * idx + 2;
             let mut largest = idx;
+            // Find the largest among idx, left child, right child
             if left < heap.len() && heap[left].0 > heap[largest].0 { largest = left; }
             if right < heap.len() && heap[right].0 > heap[largest].0 { largest = right; }
-            if largest == idx { break; }
+            if largest == idx { break; } // heap property restored
             heap.swap(idx, largest);
             idx = largest;
         }
@@ -132,6 +137,8 @@ fn k_nearest(query: &[f32], train: &FlatTrainData, k: usize) -> Vec<(f32, u8)> {
     let mut heap: Vec<(f32, u8)> = Vec::with_capacity(k + 1);
 
     for i in 0..train.n {
+        // Once the heap is full, use the worst current neighbor as the cutoff;
+        // any candidate farther away can be skipped immediately
         let threshold = if heap.len() == k { heap[0].0 } else { f32::INFINITY };
         let dist = squared_distance_bounded(query, train.features_of(i), threshold);
         if dist < threshold {
@@ -139,6 +146,7 @@ fn k_nearest(query: &[f32], train: &FlatTrainData, k: usize) -> Vec<(f32, u8)> {
         }
     }
 
+    // Sort nearest-first so majority_vote tie-breaking works correctly
     heap.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
     heap
 }
@@ -155,19 +163,20 @@ fn majority_vote(neighbors: &[(f32, u8)]) -> u8 {
     // Find the max count with a single pass — no Vec, no collect
     let max_count = counts.iter().copied().fold(0, u32::max);
 
-    // Count how many labels share the max — if exactly one, return it directly
-    let mut winner = 10u8; // sentinel: >9 means "tie so far"
+    // Walk counts once to detect a tie; bail early if one is found
+    let mut winner = 10u8; // sentinel: 10 is out-of-range, meaning "no winner yet"
     let mut unique = true;
     for (label, &c) in counts.iter().enumerate() {
         if c == max_count {
             if winner == 10 {
-                winner = label as u8;
+                winner = label as u8; // first label with max count
             } else {
-                unique = false;
+                unique = false; // second label tied — fall back to nearest neighbor
                 break;
             }
         }
     }
 
+    // Unique winner → return it; tie → return the label of the single closest neighbor
     if unique { winner } else { neighbors[0].1 }
 }

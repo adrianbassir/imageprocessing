@@ -17,6 +17,7 @@ pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: u
     let mut predictions = vec![0u8; test.len()];
 
     // Allocate heap buffers once — reused across all tile iterations via .clear()
+    // k+1 capacity avoids a realloc during heap_push before the eviction step
     let mut heaps: [Vec<(f32, u8)>; TILE] = Default::default();
     for h in heaps.iter_mut() {
         h.reserve(k + 1);
@@ -31,6 +32,7 @@ pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: u
         for h in heaps[..tile_size].iter_mut() {
             h.clear();
         }
+        // Start with infinity so every candidate is accepted until the heap is full
         let mut thresholds = [f32::INFINITY; TILE];
 
         // Single pass over all training images, updating all TILE heaps
@@ -54,6 +56,7 @@ pub fn classify_sequential(train: &FlatTrainData, test: &[NormalizedImage], k: u
         }
 
         for b in 0..tile_size {
+            // Sort nearest-first before voting so tie-breaking picks the closest neighbor
             heaps[b].sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
             predictions[tile_start + b] = knn_vote(&heaps[b]);
         }

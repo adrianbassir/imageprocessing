@@ -40,6 +40,7 @@ pub fn efficiency(speedup: f64, num_threads: usize) -> f64 {
 
 const RUNS: usize = 3;
 const THREAD_COUNTS: &[usize] = &[1, 2, 4, 8];
+// 1 sequential + 4 threaded configs + 1 rayon, each run RUNS times
 const TOTAL_CONFIGS: u64 = (1 + 4 + 1) * RUNS as u64;
 
 /// Run all configurations (sequential, threaded at 1/2/4/8, Rayon) and
@@ -74,6 +75,7 @@ pub fn run_all_benchmarks(
         efficiency: 1.0,
     });
 
+    // Wrap training data in Arc so each threaded benchmark run can cheaply clone the reference
     let train_arc = Arc::new(FlatTrainData {
         features: train.features.clone(),
         labels: train.labels.clone(),
@@ -103,6 +105,7 @@ pub fn run_all_benchmarks(
         classify_rayon(train, test, k);
     });
     let sp = speedup(seq_time, rayon_elapsed);
+    // Rayon manages its own thread pool; query its size for the efficiency calculation
     let rayon_threads = rayon::current_num_threads();
     let eff = efficiency(sp, rayon_threads);
     results.push(BenchmarkResult {
@@ -127,6 +130,6 @@ fn median_time<F: Fn()>(n: usize, pb: &ProgressBar, label: &str, f: F) -> Durati
             t
         })
         .collect();
-    times.sort();
-    times[n / 2]
+    times.sort(); // ascending sort so index n/2 is the true median
+    times[n / 2]  // integer division: for RUNS=3 this is index 1, the middle value
 }

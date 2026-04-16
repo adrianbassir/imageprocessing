@@ -21,10 +21,12 @@ use imgProcessing::parallel::{classify_rayon, classify_threaded};
 use imgProcessing::preprocess::{compute_channel_stats, flatten, normalize_all_zscore, NormalizedImage};
 use imgProcessing::sequential::classify_sequential;
 
+/// Build a styled progress bar with a fixed-width prefix column and ETA.
 fn progress_bar(len: u64, prefix: &str) -> ProgressBar {
     let pb = ProgressBar::new(len);
     pb.set_style(
         ProgressStyle::with_template(
+            // {prefix:<22} left-aligns the label in a 22-char column so bars stay aligned
             "{prefix:<22} [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
         )
         .unwrap()
@@ -54,9 +56,10 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     let data_dir = args.get(1).map(String::as_str).unwrap_or("data/cifar-10-batches-bin");
+    // and_then + parse().ok() silently falls back to the default on bad input
     let k: usize = args.get(2).and_then(|s| s.parse().ok()).unwrap_or(5);
-    let train_limit: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let test_limit: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);
+    let train_limit: usize = args.get(3).and_then(|s| s.parse().ok()).unwrap_or(0); // 0 = use all
+    let test_limit: usize = args.get(4).and_then(|s| s.parse().ok()).unwrap_or(0);  // 0 = use all
 
     println!("Loading dataset from '{data_dir}'...");
     let dataset = load_dataset(data_dir);
@@ -66,6 +69,7 @@ fn main() {
         dataset.test.len()
     );
 
+    // .min() guards against a limit larger than the actual dataset size
     let train_raw = if train_limit == 0 {
         &dataset.train[..]
     } else {
@@ -112,6 +116,7 @@ fn main() {
     let train = Arc::new(flatten(&train_normalized));
     println!();
 
+    // Extract ground-truth labels once; shared across all three accuracy checks
     let ground_truth: Vec<u8> = test.iter().map(|img| img.label).collect();
 
     // --- Correctness check ---
@@ -125,6 +130,7 @@ fn main() {
     let threaded_preds = classify_with_bar("  threaded-4", &test, |chunk| {
         classify_threaded(Arc::clone(&train), chunk, k, 4)
     });
+    // Assert exact output equality — parallel results must be deterministic
     assert_eq!(seq_preds, threaded_preds, "sequential and threaded predictions differ");
     print_accuracy("  threaded-4", accuracy(&threaded_preds, &ground_truth));
 

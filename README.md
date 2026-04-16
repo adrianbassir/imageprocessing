@@ -1,20 +1,18 @@
-# Sequential vs Parallel Image Classification in Rust
-## _Adrian Bassir & Matthew Kane_
-**CSI-380: Emerging Languages**
+# [PROJECT TITLE]
+## _[YOUR NAME] & [PARTNER NAME]_
+**[COURSE NAME]**
 
 ---
 
 ## Project Description
 
-<!-- 2-3 sentence overview of what the project does. Include algorithm, dataset, and evaluation metrics. -->
+[PROJECT OVERVIEW — 2-3 sentences]
 
-_TODO: Write a brief overview of the project here._
+**Algorithm:** [ALGORITHM NAME]
 
-**Algorithm:** <!-- e.g. K-Nearest Neighbors (KNN) -->
+**Dataset:** [DATASET NAME AND DESCRIPTION]
 
-**Dataset:** <!-- e.g. CIFAR-10 — 50,000 training images, 10,000 test images, 32×32 RGB, 10 classes -->
-
-**Evaluation metrics:** <!-- e.g. classification accuracy, execution time, speedup, efficiency -->
+**Evaluation metrics:** [METRICS USED]
 
 ---
 
@@ -24,107 +22,61 @@ Benchmarks were run on two machines:
 
 | | System 1 | System 2 |
 |---|---|---|
-| **Owner** | | |
-| **CPU** | | |
-| **Physical cores** | | |
-| **RAM** | | |
-| **OS** | | |
+| **Owner** | [SYSTEM 1 OWNER] | [SYSTEM 2 OWNER] |
+| **CPU** | [SYSTEM 1 CPU] | [SYSTEM 2 CPU] |
+| **Physical cores** | [SYSTEM 1 CORES] | [SYSTEM 2 CORES] |
+| **RAM** | [SYSTEM 1 RAM] | [SYSTEM 2 RAM] |
+| **OS** | [SYSTEM 1 OS] | [SYSTEM 2 OS] |
 
 ---
 
 ## Prerequisites
 
-**Rust toolchain:** rustc 1.75.0 or later. Install via [rustup](https://rustup.rs/).
-
-**System requirements:**
-- RAM: 16 GB recommended (the full CIFAR-10 training set expands to ~600 MB of `f32` vectors in memory)
-- CPU: 4+ physical cores recommended to observe meaningful parallel speedup at higher thread counts
-
-**External crates** (declared in `Cargo.toml`):
-- `rayon` — data-parallel iterators
-- `indicatif` — progress bars
-- `criterion` — benchmark harness (dev dependency)
-
-No GPU, Python environment, or external build tooling is required.
+[PREREQUISITES — what needs to be installed and any system requirements]
 
 ---
 
 ## Setup Instructions
 
-### 1. Open the project
+[SETUP STEPS — how to get the project running from scratch]
 
-```
-cd image-processing
-```
+---
 
-### 2. Download the CIFAR-10 dataset
+## Results
 
-The dataset is **not included** in this repository. Download it manually:
+### Accuracy
 
-1. Go to: https://www.cs.toronto.edu/~kriz/cifar.html
-2. Download **CIFAR-10 binary version (for C programs)** — `cifar-10-binary.tar.gz`
-3. Extract the archive
+| Implementation | Accuracy |
+|---|---|
+| Sequential | [ACCURACY]% |
+| Threaded-4 | [ACCURACY]% |
+| Rayon | [ACCURACY]% |
 
-### 3. Place dataset files
+### Benchmark — System 1 ([SYSTEM 1 OWNER])
 
-Copy the extracted binary files into the `data/` directory at the project root:
+| Configuration | Threads | Time (ms) | Speedup | Efficiency |
+|---|---|---|---|---|
+| sequential | 1 | [TIME] | 1.000 | 1.000 |
+| threaded-1 | 1 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-2 | 2 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-4 | 4 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-8 | 8 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| rayon | [THREADS] | [TIME] | [SPEEDUP] | [EFFICIENCY] |
 
-```
-data/
-├── data_batch_1.bin
-├── data_batch_2.bin
-├── data_batch_3.bin
-├── data_batch_4.bin
-├── data_batch_5.bin
-└── test_batch.bin
-```
+### Benchmark — System 2 ([SYSTEM 2 OWNER])
 
-Do not rename the files. The loader expects these exact filenames.
+| Configuration | Threads | Time (ms) | Speedup | Efficiency |
+|---|---|---|---|---|
+| sequential | 1 | [TIME] | 1.000 | 1.000 |
+| threaded-1 | 1 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-2 | 2 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-4 | 4 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| threaded-8 | 8 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| rayon | [THREADS] | [TIME] | [SPEEDUP] | [EFFICIENCY] |
 
-### 4. Build
+### Analysis
 
-```bash
-cargo build --release
-```
-
-### 5. Run
-
-```bash
-cargo run --release
-```
-
-By default this runs all three classifiers (sequential, threaded, Rayon) and prints a benchmark summary.
-
-**Optional positional arguments:**
-
-```
-cargo run --release [data_dir] [k] [train_limit] [test_limit]
-```
-
-| Argument | Default | Description |
-|---|---|---|
-| `data_dir` | `data/cifar-10-batches-bin` | Path to the folder containing the `.bin` batch files |
-| `k` | `5` | Number of nearest neighbors |
-| `train_limit` | `0` (full 50,000) | Cap on training images; `0` means use all |
-| `test_limit` | `0` (full 10,000) | Cap on test images; `0` means use all |
-
-**Example — quick smoke test on a small subset:**
-
-```bash
-cargo run --release data/cifar-10-batches-bin 5 1000 200
-```
-
-### 6. Run tests
-
-```bash
-cargo test
-```
-
-### 7. Run benchmarks
-
-```bash
-cargo bench
-```
+[ANALYSIS — 3-5 sentences]
 
 ---
 
