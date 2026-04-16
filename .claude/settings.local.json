@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo check:*)",
+      "Bash(ls tests/)",
+      "Bash(ls benches/)",
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo bench:*)",
+      "Bash(git rm:*)",
+      "Bash(cargo run:*)",
+      "Bash(sed 's/const TILE: usize = 4/const TILE: usize = 8/' src/sequential.rs)",
+      "Bash(cp src/sequential.rs /tmp/seq_orig.rs)",
+      "Bash(cp /tmp/seq8.rs src/sequential.rs)",
+      "Bash(sed 's/const TILE: usize = 4/const TILE: usize = 16/' src/sequential.rs)",
+      "Bash(cp /tmp/seq16.rs src/sequential.rs)",
+      "Bash(sed 's/const TILE: usize = 4/const TILE: usize = 32/' src/sequential.rs)",
+      "Bash(cp /tmp/seq32.rs src/sequential.rs)",
+      "Bash(sed 's/const TILE: usize = 4/const TILE: usize = 64/' src/sequential.rs)",
+      "Bash(cp /tmp/seq64.rs src/sequential.rs)",
+      "Bash(gh pr create --title 'z-score normalization + README fixes' --body ':*)",
+      "Bash(gh pr create --title 'Clean up codebase for submission' --body ' *)"
+    ]
+  }
+}
