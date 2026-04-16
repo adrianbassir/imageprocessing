@@ -7,13 +7,13 @@ use std::io::{self, Read};
 use std::path::Path;
 
 pub struct Image {
-    pub label: u8,
-    pub pixels: Vec<u8>,
+    pub label: u8,       // class index 0–9 (airplane, automobile, …, truck)
+    pub pixels: Vec<u8>, // 3072 raw bytes: 1024 R, 1024 G, 1024 B (channel-first)
 }
 
 pub struct Dataset {
-    pub train: Vec<Image>,
-    pub test: Vec<Image>,
+    pub train: Vec<Image>, // images loaded from data_batch_1..5.bin (up to 50 000)
+    pub test: Vec<Image>,  // images loaded from test_batch.bin (up to 10 000)
 }
 
 const RECORD_SIZE: usize = 1 + 3072; // 1 label byte + 3072 pixel bytes
@@ -58,8 +58,8 @@ fn parse_batch(path: &str) -> Vec<Image> {
 
     buf.chunks_exact(RECORD_SIZE)
         .map(|record| {
-            let label = record[0];
-            let pixels = record[1..].to_vec();
+            let label = record[0];          // first byte is the class label
+            let pixels = record[1..].to_vec(); // remaining 3072 bytes are pixel data
             Image { label, pixels }
         })
         .collect()

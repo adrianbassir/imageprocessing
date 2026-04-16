@@ -14,9 +14,9 @@ pub struct NormalizedImage {
 /// giving the CPU prefetcher a single sequential stream to follow.
 pub struct FlatTrainData {
     pub features: Vec<f32>, // row-major: [img0_f0..f3071, img1_f0..f3071, ...]
-    pub labels: Vec<u8>,
-    pub dims: usize,
-    pub n: usize,
+    pub labels: Vec<u8>,    // parallel array — labels[i] corresponds to features_of(i)
+    pub dims: usize,        // number of features per image (3072 for CIFAR-10)
+    pub n: usize,           // total number of training images
 }
 
 impl FlatTrainData {
@@ -31,8 +31,8 @@ impl FlatTrainData {
 /// Per-channel mean and standard deviation computed from the training set.
 /// CIFAR-10 layout: 1024 R pixels, then 1024 G, then 1024 B (channel-first).
 pub struct ChannelStats {
-    pub mean: [f32; 3],
-    pub std: [f32; 3],
+    pub mean: [f32; 3], // index 0=R, 1=G, 2=B; values in [0, 1] space
+    pub std: [f32; 3],  // standard deviation in the same [0, 1] space
 }
 
 const PIXELS_PER_CHANNEL: usize = 1024;
@@ -45,6 +45,7 @@ pub fn compute_channel_stats(images: &[Image]) -> ChannelStats {
     let n = images.len();
     assert!(n > 0, "cannot compute stats from empty image set");
 
+    // f64 accumulator avoids precision loss summing ~51M values (50 000 images × 1024 pixels)
     let total = (n * PIXELS_PER_CHANNEL) as f64;
 
     // --- Pass 1: mean ---
@@ -123,10 +124,10 @@ pub fn normalize_all(images: &[Image]) -> Vec<NormalizedImage> {
 pub fn flatten(images: &[NormalizedImage]) -> FlatTrainData {
     let n = images.len();
     let dims = if n > 0 { images[0].features.len() } else { 0 };
-    let mut features = Vec::with_capacity(n * dims);
+    let mut features = Vec::with_capacity(n * dims); // single allocation for all feature vectors
     let mut labels = Vec::with_capacity(n);
     for img in images {
-        features.extend_from_slice(&img.features);
+        features.extend_from_slice(&img.features); // append this image's features contiguously
         labels.push(img.label);
     }
     FlatTrainData { features, labels, dims, n }
