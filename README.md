@@ -22,11 +22,11 @@ Benchmarks were run on two machines:
 
 | | System 1 | System 2 |
 |---|---|---|
-| **Owner** | Adrian Bassir | [SYSTEM 2 OWNER] |
-| **CPU** | Intel Core Ultra 7 255U | [SYSTEM 2 CPU] |
-| **Physical cores** | 12 | [SYSTEM 2 CORES] |
-| **RAM** | 32 GB DDR5-7600 | [SYSTEM 2 RAM] |
-| **OS** | Windows 11 Home | [SYSTEM 2 OS] |
+| **Owner** | Adrian Bassir | Matthew Kane |
+| **CPU** | Intel Core Ultra 7 255U | Intel Core i7-12700H |
+| **Physical cores** | 12 | 14 |
+| **RAM** | 32 GB DDR5-7600 | 32 GB DDR5-4800 |
+| **OS** | Windows 11 Home | Windows 11 Home |
 
 ---
 
@@ -80,20 +80,20 @@ Note: This project runs entirely on the CPU so no GPU is required
 | threaded-8 | 8 | 29311 | 3.825 | 0.478 |
 | rayon | 14 | 27762 | 4.039 | 0.288 |
 
-### Benchmark — System 2 ([SYSTEM 2 OWNER])
+### Benchmark — System 2 (Matthew Kane)
 
 | Configuration | Threads | Time (ms) | Speedup | Efficiency |
 |---|---|---|---|---|
-| sequential | 1 | [TIME] | 1.000 | 1.000 |
-| threaded-1 | 1 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
-| threaded-2 | 2 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
-| threaded-4 | 4 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
-| threaded-8 | 8 | [TIME] | [SPEEDUP] | [EFFICIENCY] |
-| rayon | [THREADS] | [TIME] | [SPEEDUP] | [EFFICIENCY] |
+| sequential | 1 | 102893 | 1.000 | 1.000 |
+| threaded-1 | 1 | 105840 | 0.972 | 0.972 |
+| threaded-2 | 2 | 58643 | 1.755 | 0.877 |
+| threaded-4 | 4 | 39092 | 2.632 | 0.658 |
+| threaded-8 | 8 | 23210 | 4.433 | 0.554 |
+| rayon | 20 | 23510 | 4.376 | 0.219 |
 
 ### Analysis
 
-Speedup increases as more threads are added to the equation, however, this does not scale linearly as doubling threads does not double the speedup since efficiency does go down as more cores are added. This can be noticed as efficiency drops quite noticeably as we get into the higher core range going down to less than 0.5 of what we saw for a sequential run (as of threaded-8), an indicator that around half of CPU time is effectively wasted. Rayon shows an efficiency in the high 0.2 range which is an interesting result (marginally better than threaded-8 but also uses 14 threads instead of 8). This shows that returns significantly diminish past 8 cores.
+On system 1 (Adrian Bassir), speedup increases as more threads are added to the equation, however, this does not scale linearly as doubling threads does not double the speedup since efficiency does go down as more cores are added. This can be noticed as efficiency drops quite noticeably as we get into the higher core range going down to less than 0.5 of what we saw for a sequential run (as of threaded-8), an indicator that around half of CPU time is effectively wasted. Rayon shows an efficiency in the high 0.2 range which is an interesting result (marginally better than threaded-8 but also uses 14 threads instead of 8). This shows that returns significantly diminish past 8 cores. On system 2 (Matthew Kane), stronger absolute speedup is achieved at 8 threads (4.443x on system 2 vs only 3.825x on system 1). In this run, threaded-8 and rayon run nearly twice as fast in wall-clock time (about 23 seconds versus about 27 to 29 seconds). Both systems show that rayon uses far more threads than the threaded implementations (8 vs 14/20) but have nearly an identical wall-clock time. In the case of the second systems, more threads seems to be slower than the threaded-8 time. Both machines have similar efficiency curves which is an expected result as more cores should have an efficiency drop off.
 
 ---
 
